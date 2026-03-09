@@ -3,264 +3,298 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Professor Scan-OS | Advanced Converter</title>
+    <title>Professor Scan-OS Pro | CamScanner Replica</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript" onload="onOpenCvReady()"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@700&family=Inter:wght@300;400;700&display=swap');
-        
-        :root { --neon: #00f2ff; --dark: #050505; --card: #111111; }
+        :root { --neon: #00f2ff; --dark: #000000; --card: #111111; }
         body { background: var(--dark); color: white; font-family: 'Inter', sans-serif; overflow-x: hidden; margin: 0; }
         
-        #splash-screen {
-            position: fixed; inset: 0; background: #000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 9999; transition: opacity 1s ease-in-out;
-        }
-
-        .dim-to-light { animation: dimLight 3s forwards; opacity: 0; }
-        @keyframes dimLight {
-            0% { opacity: 0; filter: blur(10px); transform: scale(0.9); }
-            100% { opacity: 1; filter: blur(0); transform: scale(1); }
-        }
-
-        .neon-text { font-family: 'Syncopate', sans-serif; color: var(--neon); text-shadow: 0 0 15px rgba(0,242,255,0.7); }
-        #main-app { display: none; opacity: 0; transition: opacity 1s ease; }
+        /* Neon Styling */
+        .neon-border { border: 2px solid var(--neon); box-shadow: 0 0 15px rgba(0,242,255,0.4); }
+        .neon-text { font-family: 'Syncopate', sans-serif; color: var(--neon); text-shadow: 0 0 10px rgba(0,242,255,0.7); }
         
-        .scanner-frame { border: 2px dashed var(--neon); transition: 0.3s; position: relative; }
-        .scanner-frame:hover { background: rgba(0,242,255,0.05); }
+        /* Loader */
+        #opencv-loader {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10000; transition: opacity 0.5s;
+        }
 
-        canvas { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
-        .processing-loader { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; border-radius: 1rem; z-index: 10; }
+        /* Canvas Container */
+        .canvas-container {
+            position: relative; background: #111; border-radius: 12px;
+            padding: 10px; border: 1px solid #222; min-h-[300px];
+            display: flex; align-items: center; justify-content: center;
+        }
+        canvas { max-width: 100%; height: auto; border-radius: 4px; }
+        
+        /* UI Elements */
+        .btn-primary { background: var(--neon); color: black; font-weight: 800; transition: 0.3s; }
+        .btn-primary:hover { opacity: 0.8; transform: scale(1.02); }
+        .btn-secondary { background: #222; color: white; border: 1px solid #333; }
+        .btn-secondary:hover { bg: #333; }
     </style>
 </head>
 <body>
 
-    <div id="splash-screen">
-        <div class="text-center dim-to-light">
-            <h1 class="neon-text text-3xl md:text-5xl mb-4 text-cyan-400">SCAN-OS</h1>
-            <div class="h-[1px] w-24 bg-cyan-500 mx-auto mb-4"></div>
-            <p class="text-[10px] tracking-[0.5em] text-gray-400 uppercase">Powered by Ahmed Faisal</p>
+    <div id="opencv-loader">
+        <div class="text-center">
+            <i class="fas fa-brain fa-spin text-5xl text-cyan-400 mb-4"></i>
+            <h1 class="neon-text text-2xl mb-2">SCAN-OS PRO</h1>
+            <p class="text-xs text-gray-500 uppercase tracking-widest">Loading AI Vision Engine...</p>
+            <p class="text-[10px] text-gray-700 mt-2">(Powered by OpenCV.js)</p>
         </div>
     </div>
 
-    <div id="main-app">
-        <nav class="p-6 border-b border-white/10 flex justify-between items-center bg-black/50 backdrop-blur-xl sticky top-0 z-50">
+    <div id="main-app" class="opacity-0 transition-opacity duration-1000">
+        <nav class="p-5 border-b border-white/10 flex justify-between items-center bg-black/50 backdrop-blur-xl sticky top-0 z-50">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center text-black font-black uppercase">P</div>
-                <h1 class="neon-text text-sm tracking-widest">SCAN-OS <span class="text-white opacity-50 text-[10px]">V2.0</span></h1>
+                <div class="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center text-black font-black">P</div>
+                <h1 class="neon-text text-sm tracking-widest">SCAN-OS <span class="text-white opacity-50">PRO</span></h1>
             </div>
-            <button onclick="toggleHistory()" class="text-xs font-bold border border-white/20 px-4 py-2 rounded-full hover:bg-white hover:text-black transition uppercase">Records</button>
+            <p class="text-[10px] text-gray-600 uppercase hidden md:block">CamScanner Replica v2.5</p>
         </nav>
 
-        <main class="max-w-5xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div class="lg:col-span-5 space-y-6">
-                <div class="scanner-frame rounded-2xl p-8 text-center" id="dropZone">
-                    <div id="loader" class="processing-loader">
-                        <div class="text-center">
-                            <i class="fas fa-sync fa-spin text-cyan-500 text-2xl mb-2"></i>
-                            <p class="text-[10px] font-bold tracking-widest">AUTO-CROPPING...</p>
-                        </div>
-                    </div>
+        <main class="max-w-7xl mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-zinc-900 p-6 rounded-2xl border border-white/5 shadow-xl">
                     <input type="file" id="fileInput" class="hidden" accept="image/*" capture="environment">
-                    <div id="uploadUI">
-                        <i class="fas fa-expand text-4xl text-cyan-500 mb-4"></i>
-                        <h2 class="text-xl font-bold mb-2 uppercase italic">Smart Capture</h2>
-                        <p class="text-[10px] text-gray-500 mb-6 uppercase">CamScanner Mode: Auto-Edge Detection</p>
-                        <button onclick="document.getElementById('fileInput').click()" class="bg-cyan-500 text-black font-black px-8 py-3 rounded-xl hover:scale-105 transition shadow-lg">SCAN NOW</button>
-                    </div>
+                    <button onclick="document.getElementById('fileInput').click()" class="w-full btn-primary py-4 rounded-xl flex items-center justify-center gap-3 mb-4">
+                        <i class="fas fa-camera text-xl"></i>
+                        <span>TAKE PICTURE / UPLOAD</span>
+                    </button>
+                    <p class="text-[10px] text-gray-500 text-center uppercase tracking-widest">Step 1: Capture Document</p>
                 </div>
 
-                <div class="bg-zinc-900/50 p-6 rounded-2xl border border-white/5 space-y-4">
-                    <div class="flex gap-2">
-                        <button onclick="applyFilter('none')" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:bg-cyan-500 hover:text-black transition">ORIGINAL</button>
-                        <button onclick="applyFilter('polish')" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:bg-cyan-500 hover:text-black transition uppercase">Polish</button>
-                        <button onclick="applyFilter('bw')" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:bg-cyan-500 hover:text-black transition uppercase">B&W</button>
+                <div id="processing-panel" class="bg-zinc-900 p-6 rounded-2xl border border-white/5 space-y-4 hidden">
+                    <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest">Step 2: Process Engine</h3>
+                    
+                    <button onclick="detectAndWarp()" class="w-full btn-secondary py-3 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-2">
+                        <i class="fas fa-magic text-cyan-400"></i> Auto Crop & Flatten
+                    </button>
+
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="applyMagicColor()" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:border hover:border-cyan-500 transition uppercase">Magic Color</button>
+                        <button onclick="applyBwFilter()" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:border hover:border-cyan-500 transition uppercase">B&W Document</button>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
-                        <select id="orient" class="bg-black border border-white/10 p-3 rounded-lg text-xs outline-none text-cyan-400 font-bold uppercase">
-                            <option value="p">Portrait</option>
-                            <option value="l">Landscape</option>
-                        </select>
-                        <button onclick="autoCropManual()" class="bg-zinc-800 p-3 rounded-lg text-[10px] font-bold uppercase hover:bg-white hover:text-black transition">Re-Crop</button>
-                    </div>
-
-                    <button onclick="generatePDF()" class="w-full bg-white text-black font-black py-4 rounded-xl mt-4 flex items-center justify-center gap-3 hover:bg-cyan-400 transition shadow-xl">
+                    <button onclick="savePDF()" class="w-full bg-white text-black font-black py-4 rounded-xl mt-4 flex items-center justify-center gap-3 shadow-lg hover:bg-cyan-400 transition">
                         <i class="fas fa-file-pdf text-xl"></i> SAVE AS PDF
                     </button>
                 </div>
             </div>
 
-            <div class="lg:col-span-7">
-                <div class="sticky top-28">
-                    <div class="flex justify-between items-center mb-4 text-[10px] font-black tracking-widest text-cyan-500">
-                        <span>A4 VIRTUAL PREVIEW</span>
-                        <span id="fileSize"></span>
-                    </div>
-                    <div class="bg-black rounded-2xl p-2 border border-white/5 min-h-[400px] flex items-center justify-center relative overflow-hidden">
-                        <canvas id="previewCanvas"></canvas>
-                        <div id="placeholder" class="absolute text-zinc-800 text-6xl opacity-20"><i class="fas fa-file-contract"></i></div>
-                    </div>
+            <div class="lg:col-span-8 space-y-4">
+                <div class="flex justify-between items-center text-[10px] font-black tracking-widest text-cyan-500 uppercase">
+                    <span>Virtual Viewport</span>
+                    <span id="status text-gray-500">Idle</span>
+                </div>
+                
+                <div class="canvas-container neon-border" id="inputContainer">
+                    <canvas id="inputCanvas"></canvas>
+                    <div id="placeholder" class="absolute text-zinc-800 text-6xl opacity-30"><i class="fas fa-file-contract"></i></div>
+                </div>
+
+                <div class="canvas-container hidden" id="outputContainer">
+                    <canvas id="outputCanvas"></canvas>
                 </div>
             </div>
         </main>
-
-        <div id="historyDrawer" class="fixed inset-y-0 right-0 w-full max-w-md bg-zinc-950 border-l border-white/10 transform translate-x-full transition-transform duration-500 z-[100] p-6 shadow-2xl">
-            <div class="flex justify-between items-center mb-8"><h2 class="text-xl font-black italic">HISTORY</h2><button onclick="toggleHistory()" class="text-2xl hover:text-cyan-500 transition">&times;</button></div>
-            <div id="historyContent" class="space-y-4 overflow-y-auto h-[80vh] pr-2"></div>
-        </div>
     </div>
 
     <script>
-        window.addEventListener('load', () => {
+        // --- OpenCV Initialization ---
+        function onOpenCvReady() {
+            document.getElementById('opencv-loader').style.opacity = '0';
             setTimeout(() => {
-                document.getElementById('splash-screen').style.opacity = '0';
-                setTimeout(() => {
-                    document.getElementById('splash-screen').style.display = 'none';
-                    document.getElementById('main-app').style.display = 'block';
-                    setTimeout(() => { document.getElementById('main-app').style.opacity = '1'; }, 50);
-                }, 1000);
-            }, 3000);
-        });
+                document.getElementById('opencv-loader').style.display = 'none';
+                document.getElementById('main-app').style.opacity = '1';
+            }, 500);
+            console.log('OpenCV.js is ready.');
+        }
 
         const fileInput = document.getElementById('fileInput');
-        const canvas = document.getElementById('previewCanvas');
-        const ctx = canvas.getContext('2d');
-        let originalImg = null;
-        let activeFilter = 'none';
+        const inputCanvas = document.getElementById('inputCanvas');
+        const outputCanvas = document.getElementById('outputCanvas');
+        let originalMat = null;
+        let processedMat = null;
 
-        fileInput.addEventListener('change', function(e) {
+        // --- File Upload & Display ---
+        fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if(!file) return;
+            if (!file) return;
 
-            document.getElementById('loader').style.display = 'flex';
             const reader = new FileReader();
-            reader.onload = function(event) {
+            reader.onload = (event) => {
                 const img = new Image();
-                img.onload = function() {
-                    originalImg = img;
-                    smartAutoCrop(img); // Trigger Auto-Crop
+                img.onload = () => {
+                    // Display original on input canvas
+                    inputCanvas.width = img.width;
+                    inputCanvas.height = img.height;
+                    const ctx = inputCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Create OpenCV Matrix
+                    if(originalMat) originalMat.delete();
+                    originalMat = cv.imread(inputCanvas);
+                    
+                    // UI Updates
                     document.getElementById('placeholder').style.display = 'none';
-                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('processing-panel').classList.remove('hidden');
+                    document.getElementById('inputContainer').classList.remove('hidden');
+                    document.getElementById('outputContainer').classList.add('hidden');
+                    setStatus('Image Loaded');
                 }
                 img.src = event.target.result;
             }
             reader.readAsDataURL(file);
         });
 
-        // --- Smart Auto Crop Logic ---
-        function smartAutoCrop(img) {
-            const tempCanvas = document.createElement('canvas');
-            const tCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = img.width;
-            tempCanvas.height = img.height;
-            tCtx.drawImage(img, 0, 0);
+        // --- CORE LOGIC: Smart Edge Detection & Perspective Warp ---
+        function detectAndWarp() {
+            if(!originalMat) return;
+            setStatus('Processing Edges...');
 
-            const imageData = tCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-            const data = imageData.data;
+            let src = originalMat.clone();
+            let dst = new cv.Mat();
             
-            let minX = img.width, minY = img.height, maxX = 0, maxY = 0;
+            // 1. Grayscale & Blur
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+            cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0);
+            
+            // 2. Canny Edge Detection
+            cv.Canny(dst, dst, 75, 200);
+            
+            // 3. Find Contours
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(dst, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+            
+            // 4. Find the largest 4-point contour (the document)
+            let maxArea = 0;
+            let docContour = null;
 
-            // Algorithm: Scan pixels to find the document edges (ignoring dark/shadowy borders)
-            for (let y = 0; y < img.height; y++) {
-                for (let x = 0; x < img.width; x++) {
-                    const idx = (y * img.width + x) * 4;
-                    const r = data[idx], g = data[idx+1], b = data[idx+2];
+            for (let i = 0; i < contours.size(); ++i) {
+                let cnt = contours.get(i);
+                let area = cv.contourArea(cnt);
+                if (area > 1000) {
+                    let peri = cv.arcLength(cnt, true);
+                    let approx = new cv.Mat();
+                    cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
                     
-                    // Simple luminance threshold to find "non-dark" areas (the paper)
-                    const brightness = (r + g + b) / 3;
-                    if (brightness > 60) { // Adjust sensitivity
-                        if (x < minX) minX = x;
-                        if (x > maxX) maxX = x;
-                        if (y < minY) minY = y;
-                        if (y > maxY) maxY = y;
+                    if (approx.rows == 4 && area > maxArea) {
+                        docContour = approx;
+                        maxArea = area;
+                    } else {
+                        approx.delete();
                     }
                 }
             }
 
-            // Margin buffering
-            const padding = 20;
-            minX = Math.max(0, minX - padding);
-            minY = Math.max(0, minY - padding);
-            maxX = Math.min(img.width, maxX + padding);
-            maxY = Math.min(img.height, maxY + padding);
-
-            const cropWidth = maxX - minX;
-            const cropHeight = maxY - minY;
-
-            // Update main canvas with cropped version
-            canvas.width = cropWidth;
-            canvas.height = cropHeight;
-            ctx.drawImage(img, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-            
-            // Re-store original as the cropped version for filters
-            const croppedImg = new Image();
-            croppedImg.src = canvas.toDataURL();
-            originalImg = croppedImg;
-        }
-
-        function drawCanvas() {
-            if(!originalImg) return;
-            canvas.width = originalImg.width;
-            canvas.height = originalImg.height;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if(activeFilter === 'bw') {
-                ctx.filter = 'grayscale(100%) contrast(170%) brightness(110%)';
-            } else if(activeFilter === 'polish') {
-                ctx.filter = 'contrast(130%) brightness(105%) saturate(110%)';
-            } else {
-                ctx.filter = 'none';
+            if (!docContour) {
+                setStatus('No Document Edge Found. Try again.');
+                src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
+                return;
             }
-            ctx.drawImage(originalImg, 0, 0);
+
+            // 5. Get points and Wrap Perspective
+            // Order points: tl, tr, br, bl
+            let pts = [];
+            for(let i=0; i<4; i++) {
+                pts.push({x: docContour.data32S[i*2], y: docContour.data32S[i*2+1]});
+            }
+            docContour.delete();
+
+            // Sort points logic (simplified)
+            pts.sort((a,b) => a.y - b.y);
+            let tl = pts[0].x < pts[1].x ? pts[0] : pts[1];
+            let tr = pts[0].x < pts[1].x ? pts[1] : pts[0];
+            let bl = pts[2].x < pts[3].x ? pts[2] : pts[3];
+            let br = pts[2].x < pts[3].x ? pts[3] : pts[2];
+
+            // Calculate output dimensions
+            const widthA = Math.sqrt(Math.pow(br.x - bl.x, 2) + Math.pow(br.y - bl.y, 2));
+            const widthB = Math.sqrt(Math.pow(tr.x - tl.x, 2) + Math.pow(tr.y - tl.y, 2));
+            const maxWidth = Math.max(widthA, widthB);
+
+            const heightA = Math.sqrt(Math.pow(tr.x - br.x, 2) + Math.pow(tr.y - br.y, 2));
+            const heightB = Math.sqrt(Math.pow(tl.x - bl.x, 2) + Math.pow(tl.y - bl.y, 2));
+            const maxHeight = Math.max(heightA, heightB);
+
+            // From coordinates to To coordinates
+            let fromCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
+            let toCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, maxWidth - 1, 0, maxWidth - 1, maxHeight - 1, 0, maxHeight - 1]);
+
+            // Warp Perspective
+            let M = cv.getPerspectiveTransform(fromCoords, toCoords);
+            if(processedMat) processedMat.delete();
+            processedMat = new cv.Mat();
+            let dsize = new cv.Size(maxWidth, maxHeight);
+            cv.warpPerspective(src, processedMat, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+            // Display on Output Canvas
+            cv.imshow(outputCanvas, processedMat);
+            
+            // Switch Views
+            document.getElementById('inputContainer').classList.add('hidden');
+            document.getElementById('outputContainer').classList.remove('hidden');
+            document.getElementById('outputContainer').classList.add('neon-border');
+
+            // Cleanup
+            src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
+            M.delete(); fromCoords.delete(); toCoords.delete();
+            setStatus('Cropped & Flattened.');
         }
 
-        function applyFilter(f) { activeFilter = f; drawCanvas(); }
+        // --- FILTERS: Magic Color & B&W ---
+        function applyMagicColor() {
+            if(!processedMat) return;
+            setStatus('Enhancing...');
+            let dst = processedMat.clone();
+            
+            // Brightness & Contrast Adjustment (Magic Color replica)
+            cv.convertScaleAbs(dst, dst, 1.2, 10); // alpha=contrast, beta=brightness
+            
+            cv.imshow(outputCanvas, dst);
+            dst.delete();
+            setStatus('Magic Color Applied.');
+        }
 
-        async function generatePDF() {
-            if(!originalImg) return alert("Empty");
+        function applyBwFilter() {
+            if(!processedMat) return;
+            setStatus('Converting to B&W...');
+            let dst = new cv.Mat();
+            
+            // Grayscale + Adaptive Thresholding (for clean doc look)
+            cv.cvtColor(processedMat, dst, cv.COLOR_RGBA2GRAY);
+            cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+            
+            cv.imshow(outputCanvas, dst);
+            dst.delete();
+            setStatus('B&W Document Applied.');
+        }
+
+        // --- SAVE PDF ---
+        function savePDF() {
             const { jsPDF } = window.jspdf;
-            const orient = document.getElementById('orient').value;
-            const doc = new jsPDF(orient, 'mm', 'a4');
-            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const imgData = outputCanvas.toDataURL('image/jpeg', 0.9);
+            
+            // Fit to A4
             const pw = doc.internal.pageSize.getWidth();
             const ph = doc.internal.pageSize.getHeight();
-            
-            let w = canvas.width, h = canvas.height;
-            const r = w / h;
-            w = pw - 10; h = w / r;
-            if(h > ph - 10) { h = ph - 10; w = h * r; }
-
-            doc.addImage(imgData, 'JPEG', 5, 5, w, h);
-            const name = `SCAN_${Date.now()}.pdf`;
-            doc.save(name);
-            saveToHistory(name);
+            doc.addImage(imgData, 'JPEG', 10, 10, pw-20, ph-20);
+            doc.save(`PRO_SCAN_${Date.now()}.pdf`);
+            setStatus('PDF Saved.');
         }
 
-        function saveToHistory(name) {
-            const history = JSON.parse(localStorage.getItem('prof_history') || '[]');
-            history.push({ name, date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() });
-            localStorage.setItem('prof_history', JSON.stringify(history));
-            renderHistory();
-        }
-
-        function renderHistory() {
-            const h = JSON.parse(localStorage.getItem('prof_history') || '[]');
-            document.getElementById('historyContent').innerHTML = h.reverse().map(i => `
-                <div class="bg-white/5 p-4 rounded-xl border border-white/5 flex justify-between items-center group">
-                    <div><p class="text-[9px] text-cyan-400 font-bold uppercase">${i.date} | ${i.time}</p><p class="text-xs opacity-70 truncate w-40">${i.name}</p></div>
-                    <i class="fas fa-file-pdf text-red-500"></i>
-                </div>
-            `).join('');
-        }
-
-        function toggleHistory() {
-            const d = document.getElementById('historyDrawer');
-            const open = d.style.transform === 'translateX(0%)';
-            d.style.transform = open ? 'translateX(100%)' : 'translateX(0%)';
-            if(!open) renderHistory();
+        function setStatus(msg) {
+            document.getElementById('status text-gray-500').innerText = msg;
         }
     </script>
 </body>
