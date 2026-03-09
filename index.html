@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professor Scan-OS | Advanced Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@700&family=Inter:wght@300;400;700&display=swap');
+        
+        :root { --neon: #00f2ff; --dark: #050505; --card: #111111; }
+        body { background: var(--dark); color: white; font-family: 'Inter', sans-serif; overflow-x: hidden; margin: 0; }
+        
+        /* Splash Screen Logic */
+        #splash-screen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 1s ease-in-out;
+        }
+
+        .dim-to-light {
+            animation: dimLight 3s forwards;
+            opacity: 0;
+        }
+
+        @keyframes dimLight {
+            0% { opacity: 0; filter: blur(10px); transform: scale(0.9); }
+            50% { opacity: 0.5; filter: blur(5px); }
+            100% { opacity: 1; filter: blur(0); transform: scale(1); }
+        }
+
+        .neon-text { 
+            font-family: 'Syncopate', sans-serif; 
+            color: var(--neon); 
+            text-shadow: 0 0 15px rgba(0,242,255,0.7); 
+        }
+
+        /* Main App Styling */
+        #main-app { display: none; opacity: 0; transition: opacity 1s ease; }
+        
+        .scanner-frame {
+            border: 2px dashed var(--neon);
+            position: relative;
+            overflow: hidden;
+            transition: 0.3s;
+        }
+        .scanner-frame:hover { background: rgba(0,242,255,0.05); }
+
+        #previewCanvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; }
+            @page { size: auto; margin: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="splash-screen">
+        <div class="text-center dim-to-light">
+            <h1 class="neon-text text-3xl md:text-5xl mb-4">SCAN-OS</h1>
+            <div class="h-[1px] w-24 bg-cyan-500 mx-auto mb-4"></div>
+            <p class="text-[10px] tracking-[0.5em] text-gray-400 uppercase">Powered by Ahmed Faisal</p>
+        </div>
+    </div>
+
+    <div id="main-app">
+        <nav class="p-6 border-b border-white/10 flex justify-between items-center bg-black/50 backdrop-blur-xl sticky top-0 z-50">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center text-black font-black">P</div>
+                <h1 class="neon-text text-sm tracking-widest">SCAN-OS <span class="text-white opacity-50 text-[10px]">V1.0</span></h1>
+            </div>
+            <button onclick="toggleHistory()" class="text-xs font-bold border border-white/20 px-4 py-2 rounded-full hover:bg-white hover:text-black transition">
+                <i class="fas fa-history mr-2"></i> RECORDS
+            </button>
+        </nav>
+
+        <main class="max-w-5xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-5 space-y-6">
+                <div class="scanner-frame rounded-2xl p-8 text-center" id="dropZone">
+                    <input type="file" id="fileInput" class="hidden" accept="image/*" capture="environment">
+                    <div id="uploadUI">
+                        <i class="fas fa-camera-retro text-4xl text-cyan-500 mb-4"></i>
+                        <h2 class="text-xl font-bold mb-2 uppercase italic">Capture Image</h2>
+                        <p class="text-[10px] text-gray-500 mb-6 uppercase tracking-widest">A4 Oriental & Horizontal Auto-Resize</p>
+                        <button onclick="document.getElementById('fileInput').click()" class="bg-cyan-500 text-black font-black px-8 py-3 rounded-xl hover:scale-105 transition shadow-lg shadow-cyan-500/20">
+                            OPEN SCANNER
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-zinc-900/50 p-6 rounded-2xl border border-white/5 space-y-4">
+                    <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Processing Engine</h3>
+                    <div class="flex gap-2">
+                        <button onclick="applyFilter('none')" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:bg-cyan-500 hover:text-black transition">ORIGINAL</button>
+                        <button onclick="applyFilter('polish')" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:bg-cyan-500 hover:text-black transition uppercase">Polish</button>
+                        <button onclick="applyFilter('bw')" class="flex-1 py-3 bg-zinc-800 rounded-lg text-[10px] font-bold hover:bg-cyan-500 hover:text-black transition uppercase">B & W</button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 pt-2">
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-bold text-gray-500">PRINT MODE</label>
+                            <select id="orient" class="w-full bg-black border border-white/10 p-3 rounded-lg text-xs outline-none text-cyan-400">
+                                <option value="p">Portrait (Vertical)</option>
+                                <option value="l">Landscape (Horizontal)</option>
+                            </select>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-bold text-gray-500">FORMAT</label>
+                            <select id="pageSize" class="w-full bg-black border border-white/10 p-3 rounded-lg text-xs outline-none">
+                                <option value="a4">ISO A4 Standard</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button onclick="generatePDF()" class="w-full bg-white text-black font-black py-4 rounded-xl mt-4 flex items-center justify-center gap-3 hover:bg-cyan-400 transition shadow-xl">
+                        <i class="fas fa-file-pdf text-xl"></i> SAVE AS PDF
+                    </button>
+                </div>
+            </div>
+
+            <div class="lg:col-span-7">
+                <div class="sticky top-28">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-[10px] font-black tracking-widest text-cyan-500 uppercase">A4 Virtual View</span>
+                        <span id="fileSize" class="text-[10px] text-gray-500 font-mono"></span>
+                    </div>
+                    <div class="bg-black rounded-2xl p-2 border border-white/5 min-h-[400px] flex items-center justify-center relative overflow-hidden">
+                        <canvas id="previewCanvas"></canvas>
+                        <div id="placeholder" class="absolute text-zinc-800 text-6xl opacity-20"><i class="fas fa-file-invoice"></i></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="historyDrawer" class="fixed inset-y-0 right-0 w-full max-w-md bg-zinc-950 border-l border-white/10 transform translate-x-full transition-transform duration-500 z-[100] p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-xl font-black italic">CONVERSION HISTORY</h2>
+                <button onclick="toggleHistory()" class="text-2xl hover:text-cyan-500 transition">&times;</button>
+            </div>
+            <div id="historyContent" class="space-y-4 overflow-y-auto h-[80vh] pr-2"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Splash Screen Controller ---
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const splash = document.getElementById('splash-screen');
+                const mainApp = document.getElementById('main-app');
+                
+                splash.style.opacity = '0';
+                setTimeout(() => {
+                    splash.style.display = 'none';
+                    mainApp.style.display = 'block';
+                    setTimeout(() => { mainApp.style.opacity = '1'; }, 50);
+                }, 1000);
+            }, 3000); // 3 seconds splash duration
+        });
+
+        // --- Core Application Logic ---
+        const fileInput = document.getElementById('fileInput');
+        const canvas = document.getElementById('previewCanvas');
+        const ctx = canvas.getContext('2d');
+        let originalImg = null;
+        let activeFilter = 'none';
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            document.getElementById('fileSize').innerText = (file.size / 1024).toFixed(1) + " KB";
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    originalImg = img;
+                    drawCanvas();
+                    document.getElementById('placeholder').style.display = 'none';
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        function drawCanvas() {
+            if(!originalImg) return;
+            canvas.width = originalImg.width;
+            canvas.height = originalImg.height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if(activeFilter === 'bw') {
+                ctx.filter = 'grayscale(100%) contrast(160%) brightness(110%)';
+            } else if(activeFilter === 'polish') {
+                ctx.filter = 'contrast(125%) brightness(105%) saturate(115%)';
+            } else {
+                ctx.filter = 'none';
+            }
+            ctx.drawImage(originalImg, 0, 0);
+        }
+
+        function applyFilter(f) {
+            activeFilter = f;
+            drawCanvas();
+        }
+
+        async function generatePDF() {
+            if(!originalImg) return alert("Error: No Image Captured.");
+
+            const { jsPDF } = window.jspdf;
+            const orientation = document.getElementById('orient').value;
+            const doc = new jsPDF({
+                orientation: orientation,
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            
+            let width = originalImg.width;
+            let height = originalImg.height;
+            const ratio = width / height;
+
+            // Auto Resize for A4
+            if (orientation === 'p') {
+                width = pageWidth - 10; 
+                height = width / ratio;
+                if(height > pageHeight - 10) {
+                    height = pageHeight - 10;
+                    width = height * ratio;
+                }
+            } else {
+                height = pageHeight - 10;
+                width = height * ratio;
+                if(width > pageWidth - 10) {
+                    width = pageWidth - 10;
+                    height = width / ratio;
+                }
+            }
+
+            doc.addImage(imgData, 'JPEG', 5, 5, width, height);
+            const timeTag = new Date().getTime();
+            const fileName = `PROF_SCAN_${timeTag}.pdf`;
+            doc.save(fileName);
+            
+            saveToHistory(fileName);
+        }
+
+        function saveToHistory(name) {
+            const now = new Date();
+            const history = JSON.parse(localStorage.getItem('prof_history') || '[]');
+            history.push({
+                name: name,
+                date: now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            });
+            localStorage.setItem('prof_history', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const history = JSON.parse(localStorage.getItem('prof_history') || '[]');
+            const container = document.getElementById('historyContent');
+            const sorted = history.reverse();
+            
+            container.innerHTML = sorted.map(item => `
+                <div class="bg-white/5 p-4 rounded-xl border border-white/5 flex justify-between items-center group hover:bg-white/10 transition">
+                    <div>
+                        <p class="text-[9px] font-black text-cyan-400 mb-1 uppercase tracking-widest">${item.date} @ ${item.time}</p>
+                        <p class="text-xs font-medium truncate w-40 opacity-80">${item.name}</p>
+                    </div>
+                    <i class="fas fa-check-circle text-cyan-500 opacity-0 group-hover:opacity-100 transition"></i>
+                </div>
+            `).join('');
+        }
+
+        function toggleHistory() {
+            const drawer = document.getElementById('historyDrawer');
+            const isOpen = drawer.style.transform === 'translateX(0%)';
+            drawer.style.transform = isOpen ? 'translateX(100%)' : 'translateX(0%)';
+            if(!isOpen) renderHistory();
+        }
+    </script>
+</body>
+</html>
